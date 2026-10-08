@@ -535,3 +535,54 @@ select:hover { border-color: var(--ink-light); }
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
   .order-card:hover, .chk-item:hover, .tenant-btn:hover { transform: none !important; }
 }
+
+/* filtros y controles */
+.order-card.hidden-card {
+  display: none
+}
+
+.oc-top {
+  flex-wrap: wrap;
+}
+
+.header-row > .segment:last-child {
+  gap: 4px;
+}
+
+.segment .seg-btn {
+  flex: 1;
+}
+
+.chk-item input:focus-visible ~ .chk-box {
+  outline: 2px solid var(--accent);
+}
+
+.toast-container {
+  width: max-content;
+  max-width: calc(100vw - 32px);
+}
+
+/* menu en computadora */
+@media (min-width: 900px) {
+  .sidebar {
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    align-self: flex-start;
+    overflow-y: auto;
+  }
+}
+
+/* cabecera y tablero en movil */
+@media (max-width: 899px) {
+  .topbar {
+    background: var(--surface);
+  }
+}
+
+@media (max-width: 650px) {
+  .kanban {
+    margin-inline: -16px;
+    padding-inline: 16px;
+  }
+}
