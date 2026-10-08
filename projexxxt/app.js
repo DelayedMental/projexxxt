@@ -207,7 +207,13 @@ function vPed(pop) {
       ${L.map((p, j) => {
         const it = items(p.id), tot = it.reduce((a,d) => a+d.cantidad, 0);
         const client = cm[p.cliente_id] || 'cliente';
-        const searchText = cleanText([client, p.id, ...it.map(d => pm[d.producto_id]?.nombre || '')].join(' '));
+        const searchText = cleanText([
+          client,
+          p.id,
+          `ped-${p.id.slice(1)}`,
+          ...it.map(d => pm[d.producto_id]?.nombre || '')
+        ]).join(' ');
+
         return `<article class="card order-card stagger ${pop===p.id?'new':''}" data-search="${esc(searchText)}" data-date="${p.fecha}" style="--i:${j}">
           <div class="oc-top">
             <div><h4 title="${esc(client.toLowerCase())}">${esc(client.toLowerCase())}</h4><span class="oc-id">PED-${p.id.replace('o','')}</span></div>
@@ -457,6 +463,8 @@ function login() {
 
 // Modal Nuevo Pedido (Mobile Bottom Sheet)
 function newOrder() {
+  if($('.modal-overlay')) return; // evitar abrir múltiples modales
+
   const pm = mine('productos'), cl = mine('clientes'), q = {};
   const el = document.createElement('div'); el.className = 'modal-overlay';
   el.innerHTML = `
@@ -464,7 +472,7 @@ function newOrder() {
       <div class="modal-handle"></div>
       <div class="modal-head-row">
         <h2>Crear Pedido</h2>
-        <button class="modal-close-btn" id="cx"><svg><use href="#i-close"></use></svg></button>
+        <button class="modal-close-btn" id="cx" aria-label="Cerrar pedido"><svg><use href="#i-close"></use></svg></button>
       </div>
       <div class="form-group">
         <label for="fc">Cliente / Destino</label>
@@ -495,7 +503,9 @@ function newOrder() {
   document.body.append(el);
   document.body.classList.add('modal-open');
   // Trap Focus timeout to avoid breaking animations
-  setTimeout(() => el.querySelector('select')?.focus(), 50);
+  setTimeout(() => {
+    if(!closing) el.querySelector('select')?.focus();
+  }, 50);
   requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('open')));
   
   let closing = false;
@@ -518,6 +528,8 @@ function newOrder() {
   });
   
   el.onclick = e => {
+    if(closing) return;
+
     if(e.target === el) return close();
     const b = e.target.closest('button'); if(!b) return;
     if(b.dataset.s) {
@@ -538,7 +550,17 @@ function newOrder() {
       
       const pid = 'o'+uid++;
       DB.pedidos.unshift({id:pid, tenant_id:S.tenant, cliente_id:$('#fc', el).value, estado:'Recibido', fecha:f});
-      ex.forEach(([id, n]) => DB.detalle.push({id:'d'+uid++, pedido_id:pid, producto_id:id, cantidad:n}));
+      ex.forEach(([id, n]) => {
+        DB.detalle.push({
+          id: 'd' + uid++,
+          pedido_id: pid,
+          producto_id: id,
+          cantidad: n
+        });
+
+        S.checked.delete(`${S.tenant}|${f}|${id}`);
+      });
+
       persistSavedData();
       close(); toast('Pedido capturado'); paint(vPed(pid));
     }
@@ -559,24 +581,43 @@ $('#app').addEventListener('click', async e => {
   else if(b.id === 'go') { S.tenant = S.pick; S.role = S.rol; S.view = 'pedidos'; shell(); }
   else if(d.v) go(d.v);
   
-  // Animación de salida Kanban (Premium Transition)
+  // cambiar estado
   else if(d.a) {
-    const card = b.closest('.order-card');
-    if(card && !RM) {
-      card.style.opacity = '0';
-      card.style.transform = 'scale(0.95) translateY(10px)';
-      card.style.filter = 'blur(4px)';
-      setTimeout(() => {
-        const p = DB.pedidos.find(x => x.id === d.a);
-        if(p) p.estado = EST[EST.indexOf(p.estado)+1];
-        persistSavedData(); paint(vPed(p.id)); toast(p.estado === 'Listo' ? 'Fase completada' : 'Transición iniciada');
-      }, 300);
+    const pedido = DB.pedidos.find(p => p.id === d.a);
+    if(!pedido || b.disabled || pedido.estado === 'Listo') return;
+
+    const estado = pedido.estado;
+    const siguiente = EST[EST.indexOf(estado)+1];
+    if(!siguiente) return;
+    
+    b.disabled = true;
+
+    const avanzar = () => {
+      if(pedido.estado !== estado) return;
+
+      pedido.estado = siguiente;
+      persistSavedData();
+
+      if($('#main-view') && S.tenant === pedido.tenant_id) {
+        if(S.view === 'pedidos') paint(vPed(pedido.id));
+        else go(S.view);
+      }
+
+      toast(siguiente === 'Listo' ? 'pedido listo' : 'al horno');
+    };
+
+    const tarjeta = b.closest('.order-card');
+
+    if(tarjeta && !RM) {
+      tarjeta.style.opacity = '0';
+      tarjeta.style.transform = 'scale(0.95) translateY(10px)';
+      tarjeta.style.filter = 'blur(4px)';
+      setTimeout(() => avanzar(), 300);
     } else {
-      const p = DB.pedidos.find(x => x.id === d.a);
-      if(p) p.estado = EST[EST.indexOf(p.estado)+1];
-      persistSavedData(); paint(vPed(p.id)); toast(p.estado === 'Listo' ? 'Fase completada' : 'Transición iniciada');
+      avanzar();
     }
   }
+
   else if(b.id === 'new') newOrder();
   else if(b.id === 'csvb') {
     const c = $('#csv');
